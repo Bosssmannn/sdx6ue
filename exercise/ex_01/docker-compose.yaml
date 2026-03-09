@@ -3,29 +3,34 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    # Restrict port forwarding to localhost only
     ports:
       - "127.0.0.1:8080:8080"
     environment:
-      - DB_USER=postgres
+      # These variables are caught by Viper/Cobra in your app
       - DB_HOST=db
-      - DB_PASSWORD=secretpassword
-      - DB_NAME=recipes
       - DB_PORT=5432
+      - DB_USER=recipe_user
+      - DB_PASSWORD=super_secure_password_123
+      - DB_NAME=recipe_db
     depends_on:
       db:
         condition: service_healthy
 
   db:
+    # Using the specific Postgres version referenced in your course
     image: postgres:14.1-alpine
     restart: always
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: secretpassword
-      POSTGRES_DB: recipes
+      POSTGRES_USER: recipe_user
+      POSTGRES_PASSWORD: super_secure_password_123
+      POSTGRES_DB: recipe_db
+    # Restrict database port to localhost only
     ports:
       - "127.0.0.1:5432:5432"
+    # Healthcheck ensures the app doesn't start until the DB is ready to accept connections
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U recipe_user -d recipe_db"]
       interval: 5s
       timeout: 5s
       retries: 5
