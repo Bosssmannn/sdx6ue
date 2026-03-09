@@ -17,7 +17,20 @@
 
 ## 3. Find the Vulnerabilities (insecure-Dockerfile)
 
-[Note: The 'insecure-Dockerfile' was not provided in the prompt. Vulnerability analysis goes here once the file is available.]
+* **Using the `latest` tag (`FROM golang:latest`)**: 
+    * *What it enables:* This introduces a severe supply chain vulnerability. Because `latest` is unpredictable, it can silently pull in a new image version that contains unpatched vulnerabilities. Furthermore, `golang:latest` is a massive "fat" image containing a full Debian-based OS. This gives an attacker a massive attack surface with countless system libraries to potentially exploit.
+* **Running as Root (Missing `USER` directive)**: 
+    * *What it enables:* By default, Docker containers run as the `root` user. If an attacker finds a Remote Code Execution (RCE) vulnerability in the Go application, they will execute commands as `root` inside the container. This makes it significantly easier for them to modify system files, install malware, or attempt a container breakout to compromise the underlying host system.
+* **Single-Stage Build (Leaving build tools in the image)**: 
+    * *What it enables:* By compiling the app and running it in the same stage, the Go compiler, package manager, and original source code are left inside the production image. If an attacker compromises the container, they can use these tools to write, compile, and execute custom C or Go malware directly on the compromised system.
+* **Installing Debugging Tools (`apt-get install curl wget netcat vim`)**: 
+    * *What it enables:* These are perfect "Living off the Land" tools for an attacker. If they gain command execution, `wget` or `curl` enables them to easily download malicious payloads from the internet. `netcat` enables them to instantly establish a reverse shell back to their own servers. `vim` allows them to easily alter configuration files to maintain persistence.
+* **Hardcoded Secrets (`ENV DB_PASSWORD=supersecretpassword123`)**: 
+    * *What it enables:* Environment variables defined in a Dockerfile are permanently baked into the image layers. Anyone who can pull the image from the registry (or access the tarball) can simply run `docker inspect <image_name>` or extract the layers to read the database password in plaintext, enabling them to gain unauthorized access to the database.
+* **Exposing Port 22 (`EXPOSE 22`)**: 
+    * *What it enables:* Port 22 is the standard port for SSH. Containers should run a single application process (the Go API). Exposing port 22 suggests an SSH daemon might be running (or intended to run), which provides attackers with a direct entry point to attempt brute-force login attacks or exploit SSH vulnerabilities. 
+* **Indiscriminate Copying (`COPY . .` without explicit `.dockerignore` context)**:
+    * *What it enables:* While a `.dockerignore` might exist locally, using `COPY . .` is risky. If sensitive files (like `.env` files containing local developer passwords, `.git` history, or SSH keys) are in the build context, they get copied directly into the image layer. An attacker can extract the image and steal these credentials to pivot to other systems or source code repositories.
 
 ## Part C: Docker Bake Multi-platform Builds
 
