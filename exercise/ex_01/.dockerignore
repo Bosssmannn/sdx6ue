@@ -1,0 +1,26 @@
+# Secrets
+.env
+*.env
+*.pem
+*.key
+*.crt
+secrets/
+
+# Git history (can leak old secrets from commits)
+.git
+.gitignore
+
+# Dev tooling
+.vscode/
+.idea/
+
+# Test files (not needed in production image)
+*_test.go
+coverage.out
+
+# OS noise
+.DS_Store
+Thumbs.db
+
+# Pre-built binary (we build fresh inside Docker)
+src/main
