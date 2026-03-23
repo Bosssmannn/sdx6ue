@@ -96,19 +96,19 @@ jobs:
             type=sha,prefix=
             type=raw,value=latest,enable={{is_default_branch}}
 
-      #- name: Build and export multi-platform image
-        #id: build
-        #uses: docker/build-push-action@v6
-        #with:
-          #context: ./exercise/ex_01
-          #file: ./exercise/ex_01/Dockerfile
-          #platforms: linux/amd64,linux/arm64
-          #push: false
-          #load: false
-          #tags: ${{ steps.meta.outputs.tags }}
-          #labels: ${{ steps.meta.outputs.labels }}
-          #cache-from: type=gha
-          #cache-to: type=gha,mode=max
+      - name: Build and export multi-platform image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: ./exercise/ex_01
+          file: ./exercise/ex_01/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: false
+          load: false
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Build single-platform image for scanning/testing
         uses: docker/build-push-action@v6
