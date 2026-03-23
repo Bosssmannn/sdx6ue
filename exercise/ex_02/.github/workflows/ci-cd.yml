@@ -1,0 +1,91 @@
+name: CI/CD Recipe API
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  pipeline:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # --- LINT ---
+      - name: Lint Python (Source Code)
+        run: |
+          pip install flake8
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+      
+      - name: Lint Dockerfile (Hadolint)
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Dockerfile
+
+      # --- SETUP FOR MULTI-ARCH ---
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # --- BUILD (Local Cache) ---
+      - name: Build Local Image for Testing
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          load: true # Loads into local Docker daemon for testing/scanning
+          tags: recipe-api:test
+
+      # --- SECURITY SCAN ---
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'recipe-api:test'
+          format: 'table'
+          exit-code: '1' # Fails the build if high-severity issues are found
+          severity: 'CRITICAL,HIGH'
+
+      # --- INTEGRATION TEST ---
+      - name: Run Integration Tests
+        run: |
+          # Start services in the background
+          docker compose up -d
+          
+          # The 'depends_on' condition: service_healthy in your compose 
+          # handles the wait for the DB, but we'll give the app a moment to bind to 8080.
+          sleep 5 
+          
+          # 1. Basic Health Check
+          echo "Testing API Health..."
+          curl -f http://localhost:8080/health || exit 1
+          
+          # 2. Functional Test (Example: List Recipes)
+          # Replace '/recipes' with an actual endpoint from your API
+          echo "Testing Recipes Endpoint..."
+          curl -f http://localhost:8080/recipes || exit 1
+          
+          # Cleanup
+          docker compose down
+
+      # --- PUSH (Multi-arch) ---
+      - name: Login to Docker Hub
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and Push Multi-arch Image
+        if: github.event_name != 'pull_request'
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/recipe-api:${{ github.sha }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/recipe-api:latest
