@@ -20,7 +20,7 @@ env:
 
 jobs:
   # ════════════════════════════════════════════════════════════════════════════
-  # 1. LINT — Updated Go version to clear CVE-2026-25679
+  # 1. LINT — Rebuilding Linter to support Go 1.26
   # ════════════════════════════════════════════════════════════════════════════
   lint:
     name: Lint
@@ -34,12 +34,10 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          # FIXED: Version bumped to 1.26.1 to resolve CVE-2026-25679
           go-version: "1.26.1"
           cache: true
           cache-dependency-path: ./exercise/ex_01/src/go.sum
 
-      # CRITICAL FIX: Ensure go.mod is aligned with the runner's Go version
       - name: Tidy Dependencies
         working-directory: ./exercise/ex_01/src
         run: |
@@ -51,7 +49,8 @@ jobs:
         with:
           version: latest
           working-directory: ./exercise/ex_01/src
-          # Added timeout to prevent runner kills during deep scans
+          # MANDATORY FIX: Force the action to compile the linter with Go 1.26
+          install-mode: goinstall 
           args: --timeout=5m
 
       - name: Lint Dockerfile with Hadolint
