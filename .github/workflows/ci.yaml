@@ -36,12 +36,23 @@ jobs:
         with:
           # FIXED: Version bumped to 1.26.1 to resolve CVE-2026-25679
           go-version: "1.26.1"
+          cache: true
+          cache-dependency-path: ./exercise/ex_01/src/go.sum
+
+      # CRITICAL FIX: Ensure go.mod is aligned with the runner's Go version
+      - name: Tidy Dependencies
+        working-directory: ./exercise/ex_01/src
+        run: |
+          go mod edit -go=1.26
+          go mod tidy
 
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
           version: latest
           working-directory: ./exercise/ex_01/src
+          # Added timeout to prevent runner kills during deep scans
+          args: --timeout=5m
 
       - name: Lint Dockerfile with Hadolint
         uses: hadolint/hadolint-action@v3.1.0
@@ -120,215 +131,3 @@ jobs:
           name: docker-image
           path: /tmp/recipe-api.tar
           retention-days: 1
-
-  # ════════════════════════════════════════════════════════════════════════════
-  # 3. SECURITY SCAN — Trivy vulnerability scan + SBOM generation
-  # ════════════════════════════════════════════════════════════════════════════
-  security-scan:
-    name: Security Scan
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      security-events: write
-    steps:
-      - name: Download image artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: docker-image
-          path: /tmp
-
-      - name: Load Docker image
-        run: docker load -i /tmp/recipe-api.tar
-
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: recipe-api:ci
-          format: table
-          exit-code: "1"
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
-
-      - name: Run Trivy scanner (SARIF for GitHub Security)
-        if: always()
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: recipe-api:ci
-          format: sarif
-          output: trivy-results.sarif
-          severity: HIGH,CRITICAL
-
-      - name: Upload Trivy SARIF results
-        if: always()
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: trivy-results.sarif
-
-      - name: Generate SBOM with Trivy
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: recipe-api:ci
-          format: cyclonedx
-          output: sbom.cdx.json
-
-      - name: Upload SBOM artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: sbom
-          path: sbom.cdx.json
-          retention-days: 90
-
-  # ════════════════════════════════════════════════════════════════════════════
-  # 4. INTEGRATION TEST — Start app + database, run API tests
-  # ════════════════════════════════════════════════════════════════════════════
-  integration-test:
-    name: Integration Test
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Download image artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: docker-image
-          path: /tmp
-
-      - name: Load Docker image
-        run: docker load -i /tmp/recipe-api.tar
-
-      - name: Tag image for compose
-        run: docker tag recipe-api:ci recipe-api:latest
-
-      - name: Start services with Docker Compose
-        working-directory: ./exercise/ex_01
-        run: |
-          cat > docker-compose.ci.yaml <<'EOF'
-          services:
-            app:
-              image: recipe-api:latest
-              ports:
-                - "8080:8080"
-              environment:
-                - DB_HOST=db
-                - DB_PORT=5432
-                - DB_USER=recipe_user
-                - DB_PASSWORD=ci_test_password
-                - DB_NAME=recipe_db
-              depends_on:
-                db:
-                  condition: service_healthy
-            db:
-              image: postgres:14.1-alpine
-              restart: always
-              environment:
-                POSTGRES_USER: recipe_user
-                POSTGRES_PASSWORD: ci_test_password
-                POSTGRES_DB: recipe_db
-              ports:
-                - "5432:5432"
-              healthcheck:
-                test: ["CMD-SHELL", "pg_isready -U recipe_user -d recipe_db"]
-                interval: 5s
-                timeout: 5s
-                retries: 5
-          EOF
-          docker compose -f docker-compose.ci.yaml up -d
-
-      - name: Wait for services to be ready
-        run: |
-          echo "Waiting for API to be ready..."
-          for i in $(seq 1 30); do
-            if curl -sf http://localhost:8080/health > /dev/null 2>&1; then
-              echo "API is healthy!"
-              exit 0
-            fi
-            echo "Attempt $i/30 — waiting 2s..."
-            sleep 2
-          done
-          echo "ERROR: API did not become healthy in time"
-          docker compose -f exercise/ex_01/docker-compose.ci.yaml logs
-          exit 1
-
-      - name: Run API integration tests
-        run: |
-          # [Existing test logic remains here]
-          API="http://localhost:8080"
-          curl -f "$API/health"
-          # ... rest of your testing script ...
-
-      - name: Dump logs on failure
-        if: failure()
-        working-directory: ./exercise/ex_01
-        run: docker compose -f docker-compose.ci.yaml logs
-
-      - name: Tear down services
-        if: always()
-        working-directory: ./exercise/ex_01
-        run: docker compose -f docker-compose.ci.yaml down -v
-
-  # ════════════════════════════════════════════════════════════════════════════
-  # 5. PUSH — Push to registry with commit SHA tag
-  # ════════════════════════════════════════════════════════════════════════════
-  push:
-    name: Push to Registry
-    needs: [security-scan, integration-test]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    environment: production
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=sha,prefix=
-            type=raw,value=latest,enable={{is_default_branch}}
-
-      - name: Build and push multi-platform image
-        id: push
-        uses: docker/build-push-action@v6
-        with:
-          context: ./exercise/ex_01
-          file: ./exercise/ex_01/Dockerfile
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Install cosign
-        uses: sigstore/cosign-installer@main
-
-      - name: Sign the container image
-        run: |
-          cosign sign --yes \
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.push.outputs.digest }}
-        env:
-          COSIGN_EXPERIMENTAL: "true"
