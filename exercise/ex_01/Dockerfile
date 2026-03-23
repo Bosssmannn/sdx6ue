@@ -1,5 +1,5 @@
 # Stage 1: Build Environment
-FROM golang:1.24-alpine AS builder
+FROM golang:1.26.1-alpine AS builder
 
 # Set the working directory to where our code will live
 WORKDIR /app/src
