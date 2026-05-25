@@ -8,9 +8,9 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: git@github.com:<YOUR_USERNAME>/sdx6ue.git  # Replace with your repo
+    repoURL: git@github.com:Bosssmannn/sdx6ue.git
     targetRevision: main
-    path: recipe-chart
+    path: exercise/ex_05/recipe-chart
     helm:
       valueFiles:
         - values.yaml

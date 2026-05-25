@@ -8,9 +8,9 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: git@github.com:<YOUR_USERNAME>/sdx6ue.git  # Replace with your repo
+    repoURL: git@github.com:Bosssmannn/sdx6ue.git
     targetRevision: main
-    path: applications
+    path: exercise/ex_05/applications
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd
