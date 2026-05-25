@@ -35,16 +35,18 @@ spec:
         - name: securityContext.readOnlyRootFilesystem
           value: "false"
       values: |
-        # Override liveness/readiness probes to TCP (http-echo has no /health endpoint)
+        # Override probe paths to "/" — hello-kubernetes responds 200 on /
         livenessProbe:
-          tcpSocket:
+          httpGet:
+            path: /
             port: 8080
-          initialDelaySeconds: 5
+          initialDelaySeconds: 10
           periodSeconds: 20
         readinessProbe:
-          tcpSocket:
+          httpGet:
+            path: /
             port: 8080
-          initialDelaySeconds: 2
+          initialDelaySeconds: 5
           periodSeconds: 10
   destination:
     server: https://kubernetes.default.svc
