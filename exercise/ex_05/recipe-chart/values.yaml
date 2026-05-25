@@ -1,0 +1,103 @@
+# ============================================================
+# Default values for recipe-api.
+# Secrets (dbPassword) are NOT set here — supply them at
+# install time via --set or an external secret manager.
+# ============================================================
+
+replicaCount: 1
+
+image:
+  repository: vstadtmueller/recipe-api
+  tag: "1.0.0"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+
+ingress:
+  enabled: true
+  className: "nginx"
+  hosts:
+    - host: recipe.local-test.de
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+  # tls:
+  #   - secretName: recipe-tls
+  #     hosts:
+  #       - recipe.local-test.de
+
+# ---- Database credentials (NO defaults — must be supplied) ----
+# Supply via: helm install ... --set dbUser=... --set dbPassword=...
+# Or via a values override file that is NOT committed to Git.
+dbUser: ""
+dbPassword: ""   # REQUIRED — never set a default here
+
+# ---- Resource limits ----
+resources:
+  requests:
+    cpu: "250m"
+    memory: "128Mi"
+  limits:
+    cpu: "500m"
+    memory: "256Mi"
+
+# ---- Security contexts ----
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+securityContext:
+  readOnlyRootFilesystem: true
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+
+# ---- Health checks ----
+livenessProbe:
+  httpGet:
+    path: /health
+    port: 8080
+  initialDelaySeconds: 15
+  periodSeconds: 20
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /ready
+    port: 8080
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  failureThreshold: 3
+
+# ---- PostgreSQL subchart (bitnami) ----
+postgresql:
+  enabled: true
+  auth:
+    username: ""         # Set at install time
+    password: ""         # Set at install time
+    postgresPassword: "" # Set at install time
+    database: recipe
+  primary:
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "256Mi"
+      limits:
+        cpu: "500m"
+        memory: "512Mi"
+    podSecurityContext:
+      enabled: true
+      runAsNonRoot: true
+      runAsUser: 999
+    containerSecurityContext:
+      enabled: true
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - ALL

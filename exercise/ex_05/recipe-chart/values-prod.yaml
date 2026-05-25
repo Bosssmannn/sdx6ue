@@ -1,0 +1,77 @@
+# ============================================================
+# values-prod.yaml — Production hardened overrides
+# Secrets (dbUser, dbPassword) are NOT set here.
+# Supply them via: --set dbUser=... --set dbPassword=...
+# or via an external secret manager (Sealed Secrets / Vault).
+# ============================================================
+
+replicaCount: 3   # HA: survive one pod restart without downtime
+
+image:
+  pullPolicy: Always   # Always pull — ensures no stale/tampered image is used
+
+# Production resource limits — sized for real load
+resources:
+  requests:
+    cpu: "250m"
+    memory: "128Mi"
+  limits:
+    cpu: "500m"
+    memory: "256Mi"
+
+# Fully hardened security context
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  readOnlyRootFilesystem: true     # No filesystem writes at all
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+  hosts:
+    - host: recipe.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: recipe-tls     # Must be provisioned (cert-manager / manual)
+      hosts:
+        - recipe.example.com
+
+postgresql:
+  enabled: true
+  auth:
+    database: recipe
+    # username / password / postgresPassword supplied at install time
+  primary:
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "256Mi"
+      limits:
+        cpu: "1000m"
+        memory: "512Mi"
+    podSecurityContext:
+      enabled: true
+      runAsNonRoot: true
+      runAsUser: 999
+      fsGroup: 999
+    containerSecurityContext:
+      enabled: true
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - ALL
+      readOnlyRootFilesystem: true

@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-cm
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: argocd
+data:
+  # Enable local accounts for RBAC testing
+  accounts.admin-user: apiKey, login
+  accounts.dev-user: apiKey, login
+
+  # Resource tracking method
+  application.resourceTrackingMethod: annotation
+
+  # Exclude secrets from automatic pruning (safety measure)
+  resource.exclusions: |
+    - apiGroups:
+        - ""
+      kinds:
+        - Secret
+      clusters:
+        - "*"

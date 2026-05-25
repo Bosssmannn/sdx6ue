@@ -1,0 +1,54 @@
+# ============================================================
+# values-dev.yaml — Local / development overrides
+# Relaxed settings for fast iteration; NOT for production.
+# ============================================================
+
+replicaCount: 1
+
+image:
+  pullPolicy: IfNotPresent   # Use cached images to speed up local cycles
+
+# Relaxed resource limits — local cluster usually has headroom
+resources:
+  requests:
+    cpu: "100m"
+    memory: "64Mi"
+  limits:
+    cpu: "500m"
+    memory: "256Mi"
+
+# Relaxed security context for dev — allows easier debugging
+# (e.g. exec into the container, write to /tmp)
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+
+securityContext:
+  readOnlyRootFilesystem: false  # Relaxed: allows writes for hot-reload / debug
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+
+ingress:
+  enabled: true
+  className: "nginx"
+  hosts:
+    - host: recipe.local-test.de
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []   # No TLS locally — plain HTTP is fine for dev
+
+# Dev DB credentials — committed here for convenience ONLY.
+# This file must NEVER be used in a production context.
+dbUser: "dev_user"
+dbPassword: "dev_password_not_secret"
+
+postgresql:
+  enabled: true
+  auth:
+    username: "dev_user"
+    password: "dev_password_not_secret"
+    postgresPassword: "dev_password_not_secret"
+    database: recipe
