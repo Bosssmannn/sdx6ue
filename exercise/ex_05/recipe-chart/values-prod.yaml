@@ -5,7 +5,7 @@
 # or via an external secret manager (Sealed Secrets / Vault).
 # ============================================================
 
-replicaCount: 3   # HA: survive one pod restart without downtime
+replicaCount: 4   # HA: survive one pod restart without downtime (bumped from 3 for GitOps demo)
 
 image:
   pullPolicy: Always   # Always pull — ensures no stale/tampered image is used
