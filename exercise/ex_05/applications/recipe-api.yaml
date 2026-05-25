@@ -20,6 +20,32 @@ spec:
           value: "recipe_user"
         - name: dbPassword
           value: "CHANGE_ME_USE_SEALED_SECRETS"
+        # ---- Demo overrides: swap to working public images ----
+        # The Exercise 4 chart references vstadtmueller/recipe-api which is
+        # not published publicly. For the GitOps demo, we override to a real
+        # public image. The chart itself is unmodified.
+        - name: image.repository
+          value: "paulbouwer/hello-kubernetes"
+        - name: image.tag
+          value: "1.10.1"
+        - name: image.pullPolicy
+          value: "IfNotPresent"
+        - name: postgresql.enabled
+          value: "false"
+        - name: securityContext.readOnlyRootFilesystem
+          value: "false"
+      values: |
+        # Override liveness/readiness probes to TCP (http-echo has no /health endpoint)
+        livenessProbe:
+          tcpSocket:
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 20
+        readinessProbe:
+          tcpSocket:
+            port: 8080
+          initialDelaySeconds: 2
+          periodSeconds: 10
   destination:
     server: https://kubernetes.default.svc
     namespace: recipe-api
