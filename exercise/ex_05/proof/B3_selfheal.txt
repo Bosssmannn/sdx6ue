@@ -1,0 +1,22 @@
+==== B3: SELF-HEAL DEMONSTRATION ====
+
+==== BEFORE manual change ====
+NAME         READY   UP-TO-DATE   AVAILABLE   AGE
+recipe-api   4/4     4            4           4m3s
+
+==== Manually scaling to 8 (simulating kubectl bypass of Git) ====
+$ kubectl scale deployment recipe-api -n recipe-api --replicas=8
+deployment.apps/recipe-api scaled
+
+==== Immediately after manual scale ====
+NAME         READY   UP-TO-DATE   AVAILABLE   AGE
+recipe-api   4/8     8            4           4m3s
+
+==== Waiting 30s for ArgoCD self-heal ====
+
+==== AFTER self-heal (ArgoCD reverted manual change automatically) ====
+NAME         READY   UP-TO-DATE   AVAILABLE   AGE
+recipe-api   4/4     4            4           4m34s
+
+PROOF: replicaCount in Git = 4 (values-prod.yaml).
+A kubectl scale to 8 was detected as drift and reverted by ArgoCD's selfHeal: true within ~30 seconds.

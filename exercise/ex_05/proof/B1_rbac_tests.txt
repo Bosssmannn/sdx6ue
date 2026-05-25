@@ -1,0 +1,51 @@
+==== B1: RBAC TESTS (logged in as dev-user) ====
+
+==== Login as dev-user ====
+$ argocd login localhost:8080 --username dev-user --password "DevUser123!" --insecure
+'dev-user:login' logged in successfully
+Context 'localhost:8080' updated
+
+==== Test 1: dev CAN list apps (expect SUCCESS) ====
+$ argocd app list
+NAME               CLUSTER                         NAMESPACE   PROJECT  STATUS  HEALTH       SYNCPOLICY  CONDITIONS  REPO                                  PATH                         TARGET
+argocd/recipe-api  https://kubernetes.default.svc  recipe-api  default  Synced  Progressing  Auto-Prune  <none>      git@github.com:Bosssmannn/sdx6ue.git  exercise/ex_05/recipe-chart  main
+argocd/root-app    https://kubernetes.default.svc  argocd      default  Synced  Healthy      Auto-Prune  <none>      git@github.com:Bosssmannn/sdx6ue.git  exercise/ex_05/applications  main
+
+==== Test 2: dev CAN view recipe-api (expect SUCCESS) ====
+$ argocd app get recipe-api
+Name:               argocd/recipe-api
+Project:            default
+Server:             https://kubernetes.default.svc
+Namespace:          recipe-api
+URL:                https://localhost:8080/applications/recipe-api
+Source:
+- Repo:             git@github.com:Bosssmannn/sdx6ue.git
+  Target:           main
+  Path:             exercise/ex_05/recipe-chart
+  Helm Values:      values.yaml,values-prod.yaml
+SyncWindow:         Sync Allowed
+Sync Policy:        Automated (Prune)
+
+==== Test 3: dev CAN sync (expect SUCCESS) ====
+$ argocd app sync recipe-api
+GROUP              KIND        NAMESPACE   NAME                       STATUS  HEALTH       HOOK  MESSAGE
+                   Secret      recipe-api  recipe-api-db-credentials  Synced                     secret/recipe-api-db-credentials unchanged
+                   Service     recipe-api  recipe-api                 Synced  Healthy            service/recipe-api unchanged
+apps               Deployment  recipe-api  recipe-api                 Synced  Healthy            deployment.apps/recipe-api configured
+networking.k8s.io  Ingress     recipe-api  recipe-api                 Synced  Progressing        ingress.networking.k8s.io/recipe-api unchanged
+
+==== Test 4: dev CANNOT delete (expect PermissionDenied) ====
+$ argocd app delete recipe-api --yes
+FATAL: rpc error: code = PermissionDenied desc = permission denied: applications, delete, default/recipe-api, sub: dev-user, iat: 2026-05-25T17:05:19Z
+
+==== Test 5: dev CANNOT add repos (expect PermissionDenied) ====
+$ argocd repo add git@github.com:fake/fake.git
+FATAL: rpc error: code = PermissionDenied desc = permission denied: repositories, create, git@github.com:fake/fake.git, sub: dev-user, iat: 2026-05-25T17:05:19Z
+
+==== Test 6: dev CANNOT modify accounts (expect PermissionDenied) ====
+$ argocd account update-password --account admin --new-password "Hack123!" --current-password "wrong"
+FATAL: rpc error: code = PermissionDenied desc = permission denied: accounts, update, admin, sub: dev-user, iat: 2026-05-25T17:05:19Z
+
+CONCLUSION: The 'developer' role has the principle of least privilege properly enforced.
+It can view and sync applications (the developer's day-to-day needs)
+but cannot delete applications, modify ArgoCD settings, or escalate privileges.

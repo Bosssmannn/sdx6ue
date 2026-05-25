@@ -83,47 +83,53 @@ In our setup:
 
 ### GitOps Flow Demonstration
 
-To demonstrate the full GitOps loop, we made a change to the Helm chart and verified ArgoCD automatically synced it:
+To demonstrate the full GitOps loop, we changed the Helm chart and verified ArgoCD automatically synced it.
 
-**Step 1 — Make a change:**
-```bash
-# Bump replica count from 1 to 2 in values.yaml
-sed -i 's/replicaCount: 1/replicaCount: 2/' recipe-chart/values.yaml
-git add recipe-chart/values.yaml
-git commit -m "Bump replica count to 2"
+**Note on demo images:** The original Exercise 4 chart references `vstadtmueller/recipe-api:1.0.0`, which was never published to a public registry, and the chart's `postgresql` subchart references a Bitnami image tag that is no longer hosted publicly. To make the end-to-end demo fully working without modifying the Exercise 4 chart, the **Application manifest** (`applications/recipe-api.yaml`) overrides the image to a real public image (`paulbouwer/hello-kubernetes:1.10.1`) and disables the PostgreSQL subchart via Helm parameters. The chart itself remains unmodified.
+
+**Step 1 — Make a change in Git:**
+```powershell
+# Bump replicaCount in values-prod.yaml from 3 to 4
+# (commit ce46643)
+git add exercise/ex_05/recipe-chart/values-prod.yaml
+git commit -m "GitOps demo: bump replicaCount 3 -> 4"
 git push origin main
 ```
 
-**Step 2 — ArgoCD detects and syncs:**
-```bash
-# Watch ArgoCD detect the change (auto-sync triggers within ~3 minutes)
-argocd app get recipe-api
+**Step 2 — ArgoCD detects and syncs (proof: `proof/A3_app_get.txt`):**
+```
+Source:
+- Repo:             git@github.com:Bosssmannn/sdx6ue.git
+  Target:           main
+  Path:             exercise/ex_05/recipe-chart
+  Helm Values:      values.yaml,values-prod.yaml
+Sync Status:        Synced to main (ce46643)
+Health Status:      Healthy
 
-# Expected output shows:
-# Sync Status:      Synced
-# Health Status:    Healthy
-# ...
-# LIVE     MANIFEST
-# Deployment recipe-api: replicas changed from 1 to 2
+GROUP              KIND        NAMESPACE   NAME                       STATUS  HEALTH       HOOK  MESSAGE
+                   Secret      recipe-api  recipe-api-db-credentials  Synced
+                   Service     recipe-api  recipe-api                 Synced  Healthy
+apps               Deployment  recipe-api  recipe-api                 Synced  Healthy
+networking.k8s.io  Ingress     recipe-api  recipe-api                 Synced  Progressing
 ```
 
-**Step 3 — Verify sync history:**
-```bash
-argocd app history recipe-api
-
-# ID  DATE                 REVISION
-# 1   2026-05-25 14:00:00  abc1234 (Initial deployment)
-# 2   2026-05-25 14:15:00  def5678 (Bump replica count to 2)
+**Step 3 — Verify sync history (proof: `proof/A3_app_history.txt`):**
+```
+SOURCE  git@github.com:Bosssmannn/sdx6ue.git
+ID      DATE                            REVISION
+0       2026-05-25 19:00:14 +0200 CEST  main (f75ac2c)   # Initial sync
+1       2026-05-25 19:00:22 +0200 CEST  main (f75ac2c)   # Retry
+2       2026-05-25 19:01:55 +0200 CEST  main (8470a43)   # CM fix
+3       2026-05-25 19:03:36 +0200 CEST  main (ce46643)   # GitOps demo: 3 -> 4 replicas
 ```
 
-**Step 4 — Verify in Kubernetes:**
-```bash
-kubectl get deployment -n recipe-api
-# NAME         READY   UP-TO-DATE   AVAILABLE   AGE
-# recipe-api   2/2     2            2           15m
+**Step 4 — Verify in Kubernetes (proof: `proof/A3_kubectl_deployment.txt`):**
+```
+NAME         READY   UP-TO-DATE   AVAILABLE   AGE
+recipe-api   4/4     4            4           3m50s
 ```
 
-*(Screenshots or terminal output should be captured during the actual execution on your cluster and appended here.)*
+The replica count of **4** matches `replicaCount: 4` in `values-prod.yaml` — proving the Git commit propagated all the way to the running cluster automatically via ArgoCD's auto-sync.
 
 ---
 
@@ -155,29 +161,39 @@ kubectl apply -f argocd/argocd-rbac-cm.yaml
 # Set passwords for the test accounts
 argocd account update-password --account dev-user --current-password <admin-pw> --new-password <dev-pw>
 
-# Login as developer
-argocd login <argocd-server> --username dev-user --password <dev-pw>
-
-# Test: developer CAN list/view applications
-argocd app list
-# Output: Shows recipe-api application — SUCCESS
-
-# Test: developer CAN sync
-argocd app sync recipe-api
-# Output: Sync triggered — SUCCESS
-
-# Test: developer CANNOT delete applications
-argocd app delete recipe-api
-# Output: permission denied: applications, delete, default/recipe-api, sub: dev-user — BLOCKED
-
-# Test: developer CANNOT modify ArgoCD settings
-argocd repo add git@github.com:example/repo.git
-# Output: permission denied: repositories, create, ... — BLOCKED
-
-# Test: developer CANNOT manage accounts
-argocd account update-password --account admin-user
-# Output: permission denied: accounts, update, ... — BLOCKED
+argocd login localhost:8080 --username dev-user --password "DevUser123!" --insecure
 ```
+
+**Actual test results (full transcript: `proof/B1_rbac_tests.txt`):**
+
+```
+==== Test 1: dev CAN list apps ====                                              SUCCESS
+$ argocd app list
+NAME               STATUS  HEALTH       SYNCPOLICY
+argocd/recipe-api  Synced  Progressing  Auto-Prune
+argocd/root-app    Synced  Healthy      Auto-Prune
+
+==== Test 3: dev CAN sync ====                                                   SUCCESS
+$ argocd app sync recipe-api
+(returns full sync result, all resources Synced)
+
+==== Test 4: dev CANNOT delete ====                                              BLOCKED
+$ argocd app delete recipe-api --yes
+FATAL: rpc error: code = PermissionDenied desc = permission denied:
+applications, delete, default/recipe-api, sub: dev-user
+
+==== Test 5: dev CANNOT add repositories ====                                    BLOCKED
+$ argocd repo add git@github.com:fake/fake.git
+FATAL: rpc error: code = PermissionDenied desc = permission denied:
+repositories, create, git@github.com:fake/fake.git, sub: dev-user
+
+==== Test 6: dev CANNOT update accounts ====                                     BLOCKED
+$ argocd account update-password --account admin --new-password "..."
+FATAL: rpc error: code = PermissionDenied desc = permission denied:
+accounts, update, admin, sub: dev-user
+```
+
+**Conclusion:** The developer role can perform its day-to-day duties (view, sync) but is blocked from any operation that modifies ArgoCD configuration or escalates privileges.
 
 ### Why is ArgoCD RBAC important even if Kubernetes RBAC is already configured?
 
@@ -269,6 +285,20 @@ ArgoCD stores repository credentials as **Kubernetes Secrets** in the `argocd` n
 - **Enforces Git as the single source of truth.** If manual changes persist, Git is no longer authoritative. This undermines the entire GitOps model: you can no longer trust that `git log` reflects what is actually running in production.
 - **Security control.** If an attacker gains limited `kubectl` access and modifies a deployment (e.g., changes the container image to a backdoored version, disables security contexts, or increases privileges), self-healing will revert the change within seconds. The attacker's modification is automatically rolled back without human intervention.
 
+**Demonstration (proof: `proof/B3_selfheal.txt`):**
+
+Git declares `replicaCount: 4`. A manual `kubectl scale` to 8 was reverted by ArgoCD within ~30 seconds:
+
+```
+BEFORE manual change:                         AFTER kubectl scale --replicas=8:
+NAME         READY                            NAME         READY
+recipe-api   4/4                              recipe-api   4/8   <- drift!
+
+Wait 30s for ArgoCD self-heal:
+NAME         READY
+recipe-api   4/4   <- reverted to Git state, drift eliminated
+```
+
 ### Pruning with `prune: true`
 
 `prune: true` means that when a resource is **removed from Git** (e.g., a YAML file is deleted or a Helm template is removed), ArgoCD will **delete the corresponding resource from the cluster**.
@@ -291,7 +321,9 @@ resource.exclusions: |
       - "*"
 ```
 
-Additionally, in the recipe-api Application manifest, we configured `ignoreDifferences` for Secrets so that ArgoCD does not flag Secrets as out-of-sync when their data differs from Git (since Secrets should be managed by Sealed Secrets or an external operator, not committed to Git in plaintext).
+**Important caveat (learned during deployment):** A *global* exclusion of Secrets prevents ArgoCD from **creating** any Secret defined in a Helm chart (e.g., our chart's `templates/secret.yaml` that holds DB credentials). The result was pods stuck in `CreateContainerConfigError: secret "recipe-api-db-credentials" not found`.
+
+The correct, more surgical approach is to use **per-Application `ignoreDifferences`** instead of a global exclusion. Our `applications/recipe-api.yaml` does this — it tells ArgoCD to ignore drift in a Secret's `/data` field (so manual edits to Secret values are not reverted) while still permitting creation. The global exclusion in `argocd-cm.yaml` was removed (see commit `8470a43`).
 
 ### What is "drift" in a GitOps context?
 

@@ -1,0 +1,20 @@
+﻿Name:               argocd/recipe-api
+Project:            default
+Server:             https://kubernetes.default.svc
+Namespace:          recipe-api
+URL:                https://localhost:8080/applications/recipe-api
+Source:
+- Repo:             git@github.com:Bosssmannn/sdx6ue.git
+  Target:           main
+  Path:             exercise/ex_05/recipe-chart
+  Helm Values:      values.yaml,values-prod.yaml
+SyncWindow:         Sync Allowed
+Sync Policy:        Automated (Prune)
+Sync Status:        Synced to main (ce46643)
+Health Status:      Progressing
+
+GROUP              KIND        NAMESPACE   NAME                       STATUS  HEALTH       HOOK  MESSAGE
+                   Secret      recipe-api  recipe-api-db-credentials  Synced                     secret/recipe-api-db-credentials unchanged
+                   Service     recipe-api  recipe-api                 Synced  Healthy            service/recipe-api unchanged
+apps               Deployment  recipe-api  recipe-api                 Synced  Healthy            deployment.apps/recipe-api configured
+networking.k8s.io  Ingress     recipe-api  recipe-api                 Synced  Progressing        ingress.networking.k8s.io/recipe-api unchanged
