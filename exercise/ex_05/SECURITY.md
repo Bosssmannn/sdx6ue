@@ -50,6 +50,10 @@ argocd account update-password --account admin --current-password <pod-name> --n
 kubectl delete secret argocd-initial-admin-secret -n argocd
 ```
 
+**Screenshot — ArgoCD UI after installation (empty Applications list, before any apps are deployed):**
+
+![ArgoCD UI after install](images/2026-05-25_18-43.png)
+
 ---
 
 ## A2. App-of-Apps Pattern
@@ -76,6 +80,10 @@ In our setup:
 - **Code review as a security gate.** Changes to deployment configurations go through pull requests, which can require approval from security-designated reviewers before merging. This prevents a single compromised account from silently modifying the deployment pipeline.
 - **Drift prevention.** If someone manually creates an ArgoCD application via the CLI or UI, it exists only in the cluster — untracked, unreviewable, and invisible to the team. With App-of-Apps, the root application's `prune: true` policy will **delete** any Application that is not declared in Git, preventing shadow deployments.
 - **Reproducibility.** The exact state of the deployment pipeline at any point in time can be reconstructed from Git history. After a security incident, responders can `git diff` to identify exactly what changed and when.
+
+**Screenshot — ArgoCD UI showing the App-of-Apps in action.** `root-app` (Healthy, Synced) is the parent that was applied manually; `recipe-api` was created automatically by ArgoCD from `applications/recipe-api.yaml` discovered in Git. Both point to `git@github.com:Bosssmannn/sdx6ue.git` at the paths `exercise/ex_05/applications` and `exercise/ex_05/recipe-chart` respectively:
+
+![App-of-Apps both Synced](images/2026-05-25_19-08.png)
 
 ---
 
@@ -229,13 +237,17 @@ ssh-keygen -t ed25519 -C "argocd-deploy-key" -f argocd-deploy-key -N ""
 # GitHub repo → Settings → Deploy Keys → Add → paste argocd-deploy-key.pub → Do NOT check "Allow write access"
 
 # Add the PRIVATE key to ArgoCD:
-argocd repo add git@github.com:<YOUR_USERNAME>/sdx6ue.git \
+argocd repo add git@github.com:Bosssmannn/sdx6ue.git \
   --ssh-private-key-path argocd-deploy-key \
   --insecure-ignore-host-key  # Only for initial setup; configure known_hosts properly in production
 
 # Securely delete the local private key after adding to ArgoCD:
 # (ArgoCD now stores it as a Kubernetes Secret)
 ```
+
+**Screenshot — GitHub Deploy Keys page proving the key is configured as read-only.** Note `"Never used — Read-only"` next to the `ArgoCD Deploy Key` entry — this is the principle of least privilege in action. Even if this key were exfiltrated, the attacker could only clone the repo, not push malicious changes that ArgoCD would auto-deploy:
+
+![GitHub deploy key is Read-only](images/2026-05-25_18-42.png)
 
 ### What is the blast radius if ArgoCD repository credentials are compromised?
 
