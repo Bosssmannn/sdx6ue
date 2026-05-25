@@ -13,11 +13,8 @@ data:
   # Resource tracking method
   application.resourceTrackingMethod: annotation
 
-  # Exclude secrets from automatic pruning (safety measure)
-  resource.exclusions: |
-    - apiGroups:
-        - ""
-      kinds:
-        - Secret
-      clusters:
-        - "*"
+  # NOTE: We do NOT exclude Secrets globally here, because that would
+  # prevent ArgoCD from CREATING Secrets defined in Helm charts.
+  # Instead, sensitive-resource protection is handled per-Application via
+  # `ignoreDifferences` (see applications/recipe-api.yaml) so manual edits
+  # to Secret /data are not flagged as drift.
